@@ -8,8 +8,11 @@
 #include <stdlib.h>
 #include <assert.h>
 
+// 全局环境变量管理器
 struct skynet_env {
+	// 自旋锁
 	struct spinlock lock;
+	// 专用的 Lua 状态机
 	lua_State *L;
 };
 

@@ -22,8 +22,11 @@ void skynet_context_dispatchall(struct skynet_context * context);	// for skynet_
 
 void skynet_context_endless(uint32_t handle);	// for monitor
 
+// 全局初始化
 void skynet_globalinit(void);
+// 全局退出
 void skynet_globalexit(void);
+// 初始化当前线程类型
 void skynet_initthread(int m);
 
 void skynet_profile_enable(int enable);

@@ -258,11 +258,18 @@ void
 skynet_start(struct skynet_config * config) {
 	// register SIGHUP for log file reopen
 	struct sigaction sa;
+	// 设置信号处理函数。当进程收到 SIGHUP信号时，将调用用户自定义的函数 handle_hup。
 	sa.sa_handler = &handle_hup;
+	// 如果某个慢速系统调用（如 read, write, accept等）在执行过程中被信号中断，那么系统调用应该自动重启，而不是返回错误。这提高了程序的健壮性
 	sa.sa_flags = SA_RESTART;
 	sigfillset(&sa.sa_mask);
+	// SIGHUP：
+	// 1. 当你在 SSH 连接中运行一个程序，然后直接关闭终端窗口或断开 SSH 连接时，会发送 SIGHUP 信号给该程序。
+	// 2. 服务器程序通常是守护进程 (Daemon)，它们没有关联的终端，因此永远不会因为“挂断”而收到这个信号。
+	// 于是，开发者们“借用”了这个信号，将其定义为：“重新加载配置/日志”的指令。
 	sigaction(SIGHUP, &sa, NULL);
 
+	// 如果配置为守护进程模式，初始化守护进程
 	if (config->daemon) {
 		if (daemon_init(config->daemon)) {
 			exit(1);

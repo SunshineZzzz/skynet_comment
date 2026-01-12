@@ -60,14 +60,20 @@ struct skynet_context {
 	CHECKCALLING_DECL
 };
 
+// 全局服务相关的信息
 struct skynet_node {
+	// 当前节点中存活的服务数量
 	ATOM_INT total;
+	// 标记全局服务信息是否初始化
 	int init;
 	uint32_t monitor_exit;
+	// 线程局部存储，线程类型
 	pthread_key_t handle_key;
+	// 是否开启CPU耗时监测 默认开启
 	bool profile;	// default is on
 };
 
+// 全局节点信息
 static struct skynet_node G_NODE;
 
 int 

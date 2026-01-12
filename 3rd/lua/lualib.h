@@ -44,8 +44,11 @@ LUAMOD_API int (luaopen_debug) (lua_State *L);
 #define LUA_LOADLIBNAME	"package"
 LUAMOD_API int (luaopen_package) (lua_State *L);
 
+// 代码缓存
 #define LUA_CACHELIB
+// 代码缓存库启用的情况下会有如下代码
 LUAMOD_API int (luaopen_cache) (lua_State *L);
+// 初始化代码缓存，初始化自旋锁
 LUALIB_API void (luaL_initcodecache) (void);
 
 /* open all previous libraries */
