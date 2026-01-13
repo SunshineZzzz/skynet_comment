@@ -34,7 +34,9 @@ int skynet_sendname(struct skynet_context * context, uint32_t source, const char
 
 int skynet_isremote(struct skynet_context *, uint32_t handle, int * harbor);
 
+// 消息回调函数签名
 typedef int (*skynet_cb)(struct skynet_context * context, void *ud, int type, int session, uint32_t source , const void * msg, size_t sz);
+// 注册服务消息回调函数
 void skynet_callback(struct skynet_context * context, void *ud, skynet_cb cb);
 
 uint32_t skynet_current_handle(void);

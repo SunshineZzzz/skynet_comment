@@ -1,3 +1,5 @@
+// Comment: 套接字相关
+
 #ifndef skynet_socket_h
 #define skynet_socket_h
 

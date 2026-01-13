@@ -1,3 +1,5 @@
+// Comment: 集群相关
+
 #ifndef SKYNET_HARBOR_H
 #define SKYNET_HARBOR_H
 
@@ -21,6 +23,7 @@ struct remote_message {
 
 void skynet_harbor_send(struct remote_message *rmsg, uint32_t source, int session);
 int skynet_harbor_message_isremote(uint32_t handle);
+// 记录当前节点高8位，用于判断消息是否为集群远程消息
 void skynet_harbor_init(int harbor);
 void skynet_harbor_start(void * ctx);
 void skynet_harbor_exit();

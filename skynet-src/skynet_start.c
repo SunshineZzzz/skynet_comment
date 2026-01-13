@@ -230,6 +230,7 @@ start(int thread) {
 	free_monitor(m);
 }
 
+// 引导程序
 static void
 bootstrap(struct skynet_context * logger, const char * cmdline) {
 	int sz = strlen(cmdline);
@@ -275,22 +276,32 @@ skynet_start(struct skynet_config * config) {
 			exit(1);
 		}
 	}
+	// 初始化节点高8位，用于判断消息是否为集群远程消息
 	skynet_harbor_init(config->harbor);
+	// 初始化全局服务信息对象
 	skynet_handle_init(config->harbor);
+	// 初始化消息队列
 	skynet_mq_init();
+	// 初始化模块
 	skynet_module_init(config->module_path);
+	// 初始化定时器
 	skynet_timer_init();
+	// 初始化套接字
 	skynet_socket_init();
+	// 开启性能分析
 	skynet_profile_enable(config->profile);
 
+	// 创建日志服务
 	struct skynet_context *ctx = skynet_context_new(config->logservice, config->logger);
 	if (ctx == NULL) {
 		fprintf(stderr, "Can't launch %s service\n", config->logservice);
 		exit(1);
 	}
 
+	// 向全局服务信息对象注册日志服务信息
 	skynet_handle_namehandle(skynet_context_handle(ctx), "logger");
 
+	// 启动引导程序，一般是snlua bootstrap，前者是服务模块名，后者是传递给服务模块的参数，一般是要加载要的 Lua 脚本文件名
 	bootstrap(ctx, config->bootstrap);
 
 	start(config->thread);

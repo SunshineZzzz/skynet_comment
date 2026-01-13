@@ -12,32 +12,55 @@
 #define DEFAULT_QUEUE_SIZE 64
 #define MAX_GLOBAL_MQ 0x10000
 
+// 空闲状态，不在全局队列中。这通常意味着该服务的消息队列是空的，没有消息需要处理。工作线程不会看到它，从而避免 CPU 空转
 // 0 means mq is not in global mq.
+// 活跃状态，在全局队列中：队列里有消息，正等待工作线程从全局队列中取出它进行处理；
+// 消息正在派发中：某个工作线程已经将它从全局队列中取出，并正在处理其队列里的消息
+// 消息派发中，虽然它从全局队列里消失了，但 in_global 依然是 1。这保证了如果有其他线程现在给它发消息，会发现它是 1，从而不会把它再次塞进全局队列。
+// 这避免了多个 Worker 同时跑一个服务的 Lua 代码。
 // 1 means mq is in global mq , or the message is dispatching.
 
 #define MQ_IN_GLOBAL 1
 #define MQ_OVERLOAD 1024
 
+// 服务消息队列
 struct message_queue {
+	// 自旋锁。因为可能有多个线程同时给这个服务发消息，必须保证压入队列的操作是线程安全的。
 	struct spinlock lock;
+	// 服务唯一Id，包含harbor id
 	uint32_t handle;
+	// 容量
 	int cap;
+	// 头指针
 	int head;
+	// 尾指针
 	int tail;
+	// 标记是否释放，保证消息处理干净后再销毁
 	int release;
+	// 是否在全局消息队列中，0表示不是，1表示是
+	// 避免多个 Worker 同时跑一个服务的 Lua 代码，造成竟态
 	int in_global;
+	// 当前未读阈值
 	int overload;
+	// 未读消息超过这个阈值，overload记录当前阈值，overload_threshold翻倍
 	int overload_threshold;
+	// 环形缓冲区，用于存储消息
 	struct skynet_message *queue;
+	// 下一个服务消息队列指针
 	struct message_queue *next;
 };
 
+// 全局队列
 struct global_queue {
+	// 头指针
 	struct message_queue *head;
+	// 尾指针
 	struct message_queue *tail;
+	// 自旋锁
 	struct spinlock lock;
 };
 
+// 全局队列对象
 static struct global_queue *Q = NULL;
 
 void 
@@ -82,6 +105,8 @@ skynet_mq_create(uint32_t handle) {
 	q->head = 0;
 	q->tail = 0;
 	SPIN_INIT(q)
+	// 创建服务对应的消息队列时，服务还没有处于工作中，标记为在全局队列中，避免其他服务Push消息时，将其加入全局队列。
+	// 当服务处于可以工作以后，才将其加入全局队列
 	// When the queue is create (always between service create and service init) ,
 	// set in_global flag to avoid push it to global queue .
 	// If the service init success, skynet_context_new will call skynet_mq_push to push it to global queue.
@@ -171,6 +196,7 @@ skynet_mq_pop(struct message_queue *q, struct skynet_message *message) {
 	return ret;
 }
 
+// 环形缓冲区扩容
 static void
 expand_queue(struct message_queue *q) {
 	struct skynet_message *new_queue = skynet_malloc(sizeof(struct skynet_message) * q->cap * 2);
@@ -201,6 +227,7 @@ skynet_mq_push(struct message_queue *q, struct skynet_message *message) {
 	}
 
 	if (q->in_global == 0) {
+		// 没在全局队列中，加入到全局队列中，让对应服务的线程处理
 		q->in_global = MQ_IN_GLOBAL;
 		skynet_globalmq_push(q);
 	}

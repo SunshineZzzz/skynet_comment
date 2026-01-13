@@ -1,3 +1,5 @@
+// Comment: 日志服务模块相关
+
 #include "skynet.h"
 
 #include <stdio.h>

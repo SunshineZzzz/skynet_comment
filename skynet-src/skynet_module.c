@@ -10,17 +10,25 @@
 #include <stdint.h>
 #include <stdio.h>
 
+// 最大模块类型数量
 #define MAX_MODULE_TYPE 32
 
+// 模块管理器
 struct modules {
+	// 记录当前已加载的模块数量
 	int count;
+	// 自旋锁，多个 Worker 线程同时尝试加载不同的服务，防止竞态
 	struct spinlock lock;
+	// 模块搜索路径
 	const char * path;
+	// 模块数组
 	struct skynet_module m[MAX_MODULE_TYPE];
 };
 
+// 全局模块管理器对象
 static struct modules * M = NULL;
 
+// 尝试加载模块
 static void *
 _try_open(struct modules *m, const char * name) {
 	const char *l;
@@ -62,6 +70,7 @@ _try_open(struct modules *m, const char * name) {
 	return dl;
 }
 
+// 查询模块
 static struct skynet_module * 
 _query(const char * name) {
 	int i;
@@ -73,6 +82,7 @@ _query(const char * name) {
 	return NULL;
 }
 
+// 获取模块的 API 函数指针
 static void *
 get_api(struct skynet_module *mod, const char *api_name) {
 	size_t name_size = strlen(mod->name);
@@ -89,6 +99,7 @@ get_api(struct skynet_module *mod, const char *api_name) {
 	return dlsym(mod->module, ptr);
 }
 
+// 从动态库中映射模块的 API 函数指针
 static int
 open_sym(struct skynet_module *mod) {
 	mod->create = get_api(mod, "_create");
@@ -101,14 +112,17 @@ open_sym(struct skynet_module *mod) {
 
 struct skynet_module * 
 skynet_module_query(const char * name) {
+	// 不加锁先瞟一眼
 	struct skynet_module * result = _query(name);
 	if (result)
 		return result;
 
 	SPIN_LOCK(M)
 
+	// 加锁后再次查询
 	result = _query(name); // double check
 
+	// 确实没有，并且模块类型数量还没有达到上限
 	if (result == NULL && M->count < MAX_MODULE_TYPE) {
 		int index = M->count;
 		void * dl = _try_open(M,name);

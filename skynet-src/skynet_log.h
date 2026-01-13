@@ -1,3 +1,5 @@
+// Comment: 日志接口相关
+
 #ifndef skynet_log_h
 #define skynet_log_h
 

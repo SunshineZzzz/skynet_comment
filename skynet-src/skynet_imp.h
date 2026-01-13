@@ -7,7 +7,9 @@
 struct skynet_config {
 	// 工作线程数量。通常设置为服务器 CPU 的核数，用于并发处理业务逻辑
 	int thread;
-	// 集群节点ID。用于标识 Skynet 集群中的不同节点。如果配置为 0，则表示以单节点模式运行
+	// 集群节点ID
+	// skynet网络节点的唯一编号，可以是 1-255 间的任意整数。一个 skynet 网络最多支持 255 个节点。每个节点有必须有一个唯一的编号。
+	// 如果 harbor 为 0 ，skynet 工作在单节点模式下。此时 master 和 address 以及 standalone 都不必设置。
 	int harbor;
 	// 性能分析开关。控制是否启用性能分析，用于统计各服务模块的 CPU 时间等指标
 	int profile;

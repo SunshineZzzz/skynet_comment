@@ -1,3 +1,5 @@
+// Comment: 定时器相关
+
 #ifndef SKYNET_TIMER_H
 #define SKYNET_TIMER_H
 

@@ -1,3 +1,5 @@
+// Comment: 内存分配相关
+
 #ifndef skynet_malloc_h
 #define skynet_malloc_h
 

@@ -11,24 +11,38 @@
 #define DEFAULT_SLOT_SIZE 4
 #define MAX_SLOT_SIZE 0x40000000
 
+// 服务名信息
 struct handle_name {
+	// 服务的字符串名称
 	char * name;
+	// 服务唯一数字 ID
 	uint32_t handle;
 };
 
+// 全局服务信息
 struct handle_storage {
+	// 读写锁
 	struct rwlock lock;
 
+	// 节点高8位，在分配新的 handle 时，它确保生成的地址高 8 位正确，从而标识该服务属于本节点
 	uint32_t harbor;
+	// 服务自增计数器，作为生成新 handle 的低 24 位基础，确保地址不重复
+	// 服务的信息存储的下一个slot
 	uint32_t handle_index;
+	// 存储服务信息数组的大小
 	int slot_size;
+	// 存储服务信息数组，hashtale
 	struct skynet_context ** slot;
 	
+	// 服务名数组的容量
 	int name_cap;
+	// 服务名数组的数量
 	int name_count;
+	// 存储服务名数组，按照字母顺序排序
 	struct handle_name *name;
 };
 
+// 全局服务信息对象
 static struct handle_storage *H = NULL;
 
 uint32_t
@@ -39,6 +53,7 @@ skynet_handle_register(struct skynet_context *ctx) {
 	
 	for (;;) {
 		int i;
+		// hash找空槽位
 		uint32_t handle = s->handle_index;
 		for (i=0;i<s->slot_size;i++,handle++) {
 			if (handle > HANDLE_MASK) {
@@ -56,9 +71,11 @@ skynet_handle_register(struct skynet_context *ctx) {
 				return handle;
 			}
 		}
+		// 走到这里，说明需要扩容
 		assert((s->slot_size*2 - 1) <= HANDLE_MASK);
 		struct skynet_context ** new_slot = skynet_malloc(s->slot_size * 2 * sizeof(struct skynet_context *));
 		memset(new_slot, 0, s->slot_size * 2 * sizeof(struct skynet_context *));
+		// rehash
 		for (i=0;i<s->slot_size;i++) {
 			if (s->slot[i]) {
 				int hash = skynet_context_handle(s->slot[i]) & (s->slot_size * 2 - 1);
@@ -184,6 +201,7 @@ skynet_handle_findname(const char * name) {
 	return handle;
 }
 
+// before位置插入服务名信息(名字和handle)
 static void
 _insert_name_before(struct handle_storage *s, char *name, uint32_t handle, int before) {
 	if (s->name_count >= s->name_cap) {
@@ -210,10 +228,12 @@ _insert_name_before(struct handle_storage *s, char *name, uint32_t handle, int b
 	s->name_count ++;
 }
 
+// 插入服务名信息(名字和handle)
 static const char *
 _insert_name(struct handle_storage *s, const char * name, uint32_t handle) {
 	int begin = 0;
 	int end = s->name_count - 1;
+	// 二分查找，查找结束begin就是新名称应该插入的位置，保持字符顺序排序
 	while (begin<=end) {
 		int mid = (begin+end)/2;
 		struct handle_name *n = &s->name[mid];

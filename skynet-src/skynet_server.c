@@ -39,22 +39,33 @@
 
 #endif
 
+// 服务信息
 struct skynet_context {
+	// 服务的实例指针
 	void * instance;
+	// 服务所属的模块
 	struct skynet_module * mod;
+	// 调用callback函数时，回传给callback的userdata，一般是instance指针
 	void * cb_ud;
+	// 服务的消息回调函数，一般在skynet_module的init函数里指定
 	skynet_cb cb;
+	// 服务专属的消息队列指针
 	struct message_queue *queue;
+	// 日志句柄
 	ATOM_POINTER logfile;
 	uint64_t cpu_cost;	// in microsec
 	uint64_t cpu_start;	// in microsec
 	char result[32];
+	// 唯一Id，包含harbor id
 	uint32_t handle;
 	int session_id;
+	// 服务信息引用计数，引用计数变量，当为0时，表示内存可以被释放
 	ATOM_INT ref;
 	size_t message_count;
+	// 是否完成初始化
 	bool init;
 	bool endless;
+	// 是否开启CPU耗时监测
 	bool profile;
 
 	CHECKCALLING_DECL
@@ -81,6 +92,7 @@ skynet_context_total() {
 	return ATOM_LOAD(&G_NODE.total);
 }
 
+// 当前节点(进程)中存活的服务数量增加
 static void
 context_inc() {
 	ATOM_FINC(&G_NODE.total);
@@ -134,6 +146,7 @@ skynet_context_new(const char * name, const char *param) {
 	if (mod == NULL)
 		return NULL;
 
+	// 创建服务实例
 	void *inst = skynet_module_instance_create(mod);
 	if (inst == NULL)
 		return NULL;
@@ -163,19 +176,23 @@ skynet_context_new(const char * name, const char *param) {
 	context_inc();
 
 	CHECKCALLING_BEGIN(ctx)
+	// 初始化服务实列，会给ctx->cb和ctx->cb_ud赋值
 	int r = skynet_module_instance_init(mod, inst, ctx, param);
 	CHECKCALLING_END(ctx)
 	if (r == 0) {
+		// 成功
 		struct skynet_context * ret = skynet_context_release(ctx);
 		if (ret) {
 			ctx->init = true;
 		}
+		// 将服务对应的消息队列加入全局队列，这里面有可能消息呢
 		skynet_globalmq_push(queue);
 		if (ret) {
 			skynet_error(ret, "LAUNCH %s %s", name, param ? param : "");
 		}
 		return ret;
 	} else {
+		// 失败
 		skynet_error(ctx, "FAILED launch %s", name);
 		uint32_t handle = ctx->handle;
 		skynet_context_release(ctx);

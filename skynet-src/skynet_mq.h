@@ -1,3 +1,5 @@
+// Comment: 消息队列相关
+
 #ifndef SKYNET_MESSAGE_QUEUE_H
 #define SKYNET_MESSAGE_QUEUE_H
 
@@ -17,9 +19,12 @@ struct skynet_message {
 
 struct message_queue;
 
+// 将服务消息队列加入到全局队列中
 void skynet_globalmq_push(struct message_queue * queue);
+// 从全局队列中取出一条服务消息队列
 struct message_queue * skynet_globalmq_pop(void);
 
+// 创建服务消息队列
 struct message_queue * skynet_mq_create(uint32_t handle);
 void skynet_mq_mark_release(struct message_queue *q);
 
@@ -29,13 +34,18 @@ void skynet_mq_release(struct message_queue *q, message_drop drop_func, void *ud
 uint32_t skynet_mq_handle(struct message_queue *);
 
 // 0 for success
+// 从当前服务对应消息队列中取出一条消息
 int skynet_mq_pop(struct message_queue *q, struct skynet_message *message);
+// 将一条消息压入到当前服务对应消息队列中
 void skynet_mq_push(struct message_queue *q, struct skynet_message *message);
 
 // return the length of message queue, for debug
+// 当前未读消息个数，用于调试
 int skynet_mq_length(struct message_queue *q);
+// 未读消息是否超过阈值
 int skynet_mq_overload(struct message_queue *q);
 
+// 初始化全局队列
 void skynet_mq_init();
 
 #endif
