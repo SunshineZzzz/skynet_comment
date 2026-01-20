@@ -1,3 +1,5 @@
+// Comment: 工作服务(sandbox)模块相关
+
 #include "skynet.h"
 #include "atomic.h"
 
@@ -21,14 +23,22 @@
 
 // #define DEBUG_LOG
 
+// 内存阈值，当 snlua 占用的内存超过阈值则触发警报
 #define MEMORY_WARNING_REPORT (1024 * 1024 * 32)
 
+// lua服务
 struct snlua {
+	// 专属的 lua 状态机
 	lua_State * L;
+	// 对应的c服务
 	struct skynet_context * ctx;
+	// 实时记录该虚拟机当前占用的总内存字节数
 	size_t mem;
+	// 内存阈值，超过该阈值会触发警报
 	size_t mem_report;
+	// 内存上限
 	size_t mem_limit;
+	// 当前活跃协程
 	lua_State * activeL;
 	ATOM_INT trap;
 };
@@ -475,6 +485,7 @@ snlua_init(struct snlua *l, struct skynet_context *ctx, const char * args) {
 	const char * self = skynet_command(ctx, "REG", NULL);
 	uint32_t handle_id = strtoul(self+1, NULL, 16);
 	// it must be first message
+	// 给自己发送消息，内容为 args
 	skynet_send(ctx, 0, handle_id, PTYPE_TAG_DONTCOPY,0, tmp, sz);
 	return 0;
 }

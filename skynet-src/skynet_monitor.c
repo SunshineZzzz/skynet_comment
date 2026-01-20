@@ -8,10 +8,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+// 监控器，负责单个工作线程
 struct skynet_monitor {
+	// 原子操作版本号（当前消息处理计数）
 	ATOM_INT version;
+	// 上次检查时的版本号
 	int check_version;
+	// 消息来源服务句柄
 	uint32_t source;
+	// 消息目标服务句柄（当前被监控的服务）
 	uint32_t destination;
 };
 

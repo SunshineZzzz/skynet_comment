@@ -21,14 +21,18 @@
 #define PTYPE_RESERVED_LUA 10
 #define PTYPE_RESERVED_SNAX 11
 
+// 消息是否不复制标志
 #define PTYPE_TAG_DONTCOPY 0x10000
+// 消息是否分配会话ID标志
 #define PTYPE_TAG_ALLOCSESSION 0x20000
 
 struct skynet_context;
 
 void skynet_error(struct skynet_context * context, const char *msg, ...);
+// 指定服务对象执行指定的命令和参数，返回命令执行结果
 const char * skynet_command(struct skynet_context * context, const char * cmd , const char * parm);
 uint32_t skynet_queryname(struct skynet_context * context, const char * name);
+// 向一个服务发送消息，返回会话ID
 int skynet_send(struct skynet_context * context, uint32_t source, uint32_t destination , int type, int session, void * msg, size_t sz);
 int skynet_sendname(struct skynet_context * context, uint32_t source, const char * destination , int type, int session, void * msg, size_t sz);
 

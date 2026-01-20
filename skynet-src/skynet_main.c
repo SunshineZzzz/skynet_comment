@@ -141,9 +141,9 @@ main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	// 初始化全局环境
+	// 初始化全局环境(全局节点信息对象)
 	skynet_globalinit();
-	// 初始化全局环境变量
+	// 初始化全局环境变量(全局环境变量管理器对象)
 	skynet_env_init();
 
 	// 忽略SIGPIPE信号
@@ -158,6 +158,7 @@ main(int argc, char *argv[]) {
 	luaL_initcodecache();
 #endif
 
+	// 初始化lua状态机用于解析配置文件
 	struct lua_State *L = luaL_newstate();
 	luaL_openlibs(L);	// link lua lib
 

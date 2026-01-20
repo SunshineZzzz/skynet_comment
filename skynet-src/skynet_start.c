@@ -18,18 +18,29 @@
 #include <string.h>
 #include <signal.h>
 
+// 全局监控器，负责监控所有工作线程
 struct monitor {
+	// 记录总共有多少个工作线程
 	int count;
+	// 工作线程对应的监控器数组
 	struct skynet_monitor ** m;
+	// 条件变量，用于唤醒睡眠的工作线程
 	pthread_cond_t cond;
+	// 互斥锁，保护条件变量和监控器数组的访问
 	pthread_mutex_t mutex;
+	// 记录当前有多少个线程正在睡觉。如果这个值等于 count，说明全系统处于空闲状态。
 	int sleep;
+	// 一个标记位。当系统准备关停时，设置为 1，通知所有线程结束循环并退出。
 	int quit;
 };
 
+// 工作线程参数
 struct worker_parm {
+	// 全局监控器对象
 	struct monitor *m;
+	// 工作线程ID
 	int id;
+	// 处理消息的权重
 	int weight;
 };
 
@@ -44,6 +55,7 @@ handle_hup(int signal) {
 
 #define CHECK_ABORT if (skynet_context_total()==0) break;
 
+// 创建线程
 static void
 create_thread(pthread_t *thread, void *(*start_routine) (void *), void *arg) {
 	if (pthread_create(thread,NULL, start_routine, arg)) {
@@ -60,6 +72,7 @@ wakeup(struct monitor *m, int busy) {
 	}
 }
 
+// 套接字线程
 static void *
 thread_socket(void *p) {
 	struct monitor * m = p;
@@ -90,6 +103,7 @@ free_monitor(struct monitor *m) {
 	skynet_free(m);
 }
 
+// 监控器线程
 static void *
 thread_monitor(void *p) {
 	struct monitor * m = p;
@@ -125,6 +139,7 @@ signal_hup() {
 	}
 }
 
+// 定时器线程
 static void *
 thread_timer(void *p) {
 	struct monitor * m = p;
@@ -150,6 +165,7 @@ thread_timer(void *p) {
 	return NULL;
 }
 
+// 工作线程
 static void *
 thread_worker(void *p) {
 	struct worker_parm *wp = p;
@@ -179,10 +195,12 @@ thread_worker(void *p) {
 	return NULL;
 }
 
+// 开始工作
 static void
 start(int thread) {
 	pthread_t pid[thread+3];
 
+	// 创建全局监控器对象
 	struct monitor *m = skynet_malloc(sizeof(*m));
 	memset(m, 0, sizeof(*m));
 	m->count = thread;
@@ -202,10 +220,17 @@ start(int thread) {
 		exit(1);
 	}
 
+	// 额外的三个线程：监控线程、定时器线程、套接字线程
 	create_thread(&pid[0], thread_monitor, m);
 	create_thread(&pid[1], thread_timer, m);
 	create_thread(&pid[2], thread_socket, m);
 
+	// 处理消息的权重
+	// 在 Skynet 的工作流程中，一个线程会从全局队列里取出一个“服务队列”。这个 weight 决定了该线程这次抓到这个服务后，要处理多少条消息才肯放手。
+	// 权重：
+	// 		-1：公平竞争模式。这个线程每次只处理该服务队列里的 1 条 消息。做完立即放手，去换下一个服务。这保证了所有服务都能被快速轮询到。 
+	// 		 0：极致吞吐量模式。这个线程一旦抓到一个服务队列，就会把该队列里所有的消息全部执行完，直到队列清空。这非常适合处理那种高频、大量的消息流。
+	//     > 0：阶梯模式。处理消息的数量是按位移计算的(通常是 队列长度/2^n 条)。
 	static int weight[] = { 
 		-1, -1, -1, -1, 0, 0, 0, 0,
 		1, 1, 1, 1, 1, 1, 1, 1, 
@@ -218,6 +243,7 @@ start(int thread) {
 		if (i < sizeof(weight)/sizeof(weight[0])) {
 			wp[i].weight= weight[i];
 		} else {
+			// 超过蓝图，就使用极致吞吐量模式
 			wp[i].weight = 0;
 		}
 		create_thread(&pid[i+3], thread_worker, &wp[i]);
@@ -230,7 +256,7 @@ start(int thread) {
 	free_monitor(m);
 }
 
-// 引导程序
+// 启动引导程序，创建cmdline参数中name服务，并且传递cmdline参数中args参数给该服务
 static void
 bootstrap(struct skynet_context * logger, const char * cmdline) {
 	int sz = strlen(cmdline);
@@ -280,13 +306,13 @@ skynet_start(struct skynet_config * config) {
 	skynet_harbor_init(config->harbor);
 	// 初始化全局服务信息对象
 	skynet_handle_init(config->harbor);
-	// 初始化消息队列
+	// 初始化全局队列对象
 	skynet_mq_init();
-	// 初始化模块
+	// 初始化全局模块管理器对象
 	skynet_module_init(config->module_path);
-	// 初始化定时器
+	// 初始化全局定时器对象
 	skynet_timer_init();
-	// 初始化套接字
+	// 初始化全局套接字对象
 	skynet_socket_init();
 	// 开启性能分析
 	skynet_profile_enable(config->profile);
@@ -302,8 +328,10 @@ skynet_start(struct skynet_config * config) {
 	skynet_handle_namehandle(skynet_context_handle(ctx), "logger");
 
 	// 启动引导程序，一般是snlua bootstrap，前者是服务模块名，后者是传递给服务模块的参数，一般是要加载要的 Lua 脚本文件名
+	// 创建snlua服务
 	bootstrap(ctx, config->bootstrap);
 
+	// 启动工作线程和辅助线程，开始工作了哦
 	start(config->thread);
 
 	// harbor_exit may call socket send, so it should exit before socket_free

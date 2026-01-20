@@ -14,7 +14,9 @@ struct skynet_message {
 };
 
 // type is encoding in skynet_message.sz high 8bit
+// 高 8 位存消息类型，低位存消息长度
 #define MESSAGE_TYPE_MASK (SIZE_MAX >> 8)
+// 消息类型偏移量
 #define MESSAGE_TYPE_SHIFT ((sizeof(size_t)-1) * 8)
 
 struct message_queue;

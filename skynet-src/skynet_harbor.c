@@ -9,6 +9,7 @@
 #include <assert.h>
 
 static struct skynet_context * REMOTE = 0;
+// 集群中的唯一编号​
 static unsigned int HARBOR = ~0;
 
 static inline int

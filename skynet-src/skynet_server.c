@@ -41,7 +41,7 @@
 
 // 服务信息
 struct skynet_context {
-	// 服务的实例指针
+	// 服务的模块实例指针
 	void * instance;
 	// 服务所属的模块
 	struct skynet_module * mod;
@@ -58,6 +58,7 @@ struct skynet_context {
 	char result[32];
 	// 唯一Id，包含harbor id
 	uint32_t handle;
+	// 在发出请求后，收到对方的返回消息时，通过session_id来匹配一个返回，对应哪个请求
 	int session_id;
 	// 服务信息引用计数，引用计数变量，当为0时，表示内存可以被释放
 	ATOM_INT ref;
@@ -84,7 +85,7 @@ struct skynet_node {
 	bool profile;	// default is on
 };
 
-// 全局节点信息
+// 全局节点信息对象
 static struct skynet_node G_NODE;
 
 int 
@@ -146,7 +147,7 @@ skynet_context_new(const char * name, const char *param) {
 	if (mod == NULL)
 		return NULL;
 
-	// 创建服务实例
+	// 创建服务模块实例
 	void *inst = skynet_module_instance_create(mod);
 	if (inst == NULL)
 		return NULL;
@@ -176,7 +177,7 @@ skynet_context_new(const char * name, const char *param) {
 	context_inc();
 
 	CHECKCALLING_BEGIN(ctx)
-	// 初始化服务实列，会给ctx->cb和ctx->cb_ud赋值
+	// 初始化服务模块实列，会给ctx->cb和ctx->cb_ud赋值
 	int r = skynet_module_instance_init(mod, inst, ctx, param);
 	CHECKCALLING_END(ctx)
 	if (r == 0) {
@@ -412,9 +413,11 @@ handle_exit(struct skynet_context * context, uint32_t handle) {
 }
 
 // skynet command
-
+// skynet 为每个模块都提供了一组相应的命令
 struct command_func {
+	// 命令名称
 	const char *name;
+	// 命令对应的处理函数指针
 	const char * (*func)(struct skynet_context * context, const char * param);
 };
 
@@ -431,9 +434,11 @@ cmd_timeout(struct skynet_context * context, const char * param) {
 static const char *
 cmd_reg(struct skynet_context * context, const char * param) {
 	if (param == NULL || param[0] == '\0') {
+		// 查询当前服务唯一Id
 		sprintf(context->result, ":%x", context->handle);
 		return context->result;
 	} else if (param[0] == '.') {
+		// 当前服务起一个"别名"(注册名字)
 		return skynet_handle_namehandle(context->handle, param + 1);
 	} else {
 		skynet_error(context, "Can't register global name %s in C", param);
@@ -666,8 +671,10 @@ cmd_signal(struct skynet_context * context, const char * param) {
 	return NULL;
 }
 
+// 模块命令
 static struct command_func cmd_funcs[] = {
 	{ "TIMEOUT", cmd_timeout },
+	// 查询当前服务唯一Id 或者 当前服务起一个“别名”（注册名字）
 	{ "REG", cmd_reg },
 	{ "QUERY", cmd_query },
 	{ "NAME", cmd_name },
@@ -689,7 +696,7 @@ static struct command_func cmd_funcs[] = {
 const char * 
 skynet_command(struct skynet_context * context, const char * cmd , const char * param) {
 	struct command_func * method = &cmd_funcs[0];
-	while(method->name) {
+ 	while(method->name) {
 		if (strcmp(cmd, method->name) == 0) {
 			return method->func(context, param);
 		}
@@ -699,6 +706,7 @@ skynet_command(struct skynet_context * context, const char * cmd , const char * 
 	return NULL;
 }
 
+// 发送消息预处理
 static void
 _filter_args(struct skynet_context * context, int type, int *session, void ** data, size_t * sz) {
 	int needcopy = !(type & PTYPE_TAG_DONTCOPY);

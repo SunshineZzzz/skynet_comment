@@ -22,6 +22,7 @@ struct remote_message {
 };
 
 void skynet_harbor_send(struct remote_message *rmsg, uint32_t source, int session);
+// 判断消息是否为集群远程消息
 int skynet_harbor_message_isremote(uint32_t handle);
 // 记录当前节点高8位，用于判断消息是否为集群远程消息
 void skynet_harbor_init(int harbor);

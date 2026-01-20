@@ -16,6 +16,7 @@ struct skynet_env {
 	lua_State *L;
 };
 
+// 全局环境变量管理器对象
 static struct skynet_env *E = NULL;
 
 const char * 
