@@ -120,6 +120,7 @@ skynet_mq_create(uint32_t handle) {
 	return q;
 }
 
+// 释放某个服务对应的消息队列
 static void 
 _release(struct message_queue *q) {
 	assert(q->next == NULL);
@@ -188,6 +189,7 @@ skynet_mq_pop(struct message_queue *q, struct skynet_message *message) {
 	}
 
 	if (ret) {
+		// 说明消息队列已经空了，将in_global标记为0，不需要放入全局队列
 		q->in_global = 0;
 	}
 	

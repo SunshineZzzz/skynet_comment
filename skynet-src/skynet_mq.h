@@ -6,10 +6,15 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+// 消息
 struct skynet_message {
+	// 消息源服务句柄
 	uint32_t source;
+	// 会话 ID，用于响应消息
 	int session;
+	// 消息数据指针
 	void * data;
+	// 消息数据长度
 	size_t sz;
 };
 
@@ -32,7 +37,9 @@ void skynet_mq_mark_release(struct message_queue *q);
 
 typedef void (*message_drop)(struct skynet_message *, void *);
 
+// 安全地销毁或回收一个私有消息队列到全局队列中
 void skynet_mq_release(struct message_queue *q, message_drop drop_func, void *ud);
+// 返回队列对应的服务句柄
 uint32_t skynet_mq_handle(struct message_queue *);
 
 // 0 for success

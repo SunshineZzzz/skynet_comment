@@ -53,7 +53,9 @@ struct skynet_context {
 	struct message_queue *queue;
 	// 日志句柄
 	ATOM_POINTER logfile;
+	// 累计消耗量，单位是微秒
 	uint64_t cpu_cost;	// in microsec
+	// 记录服务第一条消息处理时间，单位是微秒
 	uint64_t cpu_start;	// in microsec
 	char result[32];
 	// 唯一Id，包含harbor id
@@ -62,6 +64,7 @@ struct skynet_context {
 	int session_id;
 	// 服务信息引用计数，引用计数变量，当为0时，表示内存可以被释放
 	ATOM_INT ref;
+	// 一共处理了多少条消息
 	size_t message_count;
 	// 是否完成初始化
 	bool init;
@@ -79,7 +82,7 @@ struct skynet_node {
 	// 标记全局服务信息是否初始化
 	int init;
 	uint32_t monitor_exit;
-	// 线程局部存储，线程类型
+	// 线程局部存储，线程类型，这样子每个线程都有属于自己的服务句柄
 	pthread_key_t handle_key;
 	// 是否开启CPU耗时监测 默认开启
 	bool profile;	// default is on
@@ -126,10 +129,13 @@ id_to_hex(char * str, uint32_t id) {
 	str[9] = '\0';
 }
 
+// 销毁服务消息队列
 struct drop_t {
+	// 当前正在被销毁的这个服务的 handle
 	uint32_t handle;
 };
 
+// 服务销毁前，将队列中的消息全部发送给源服务，报告错误
 static void
 drop_message(struct skynet_message *msg, void *ud) {
 	struct drop_t *d = ud;
@@ -189,6 +195,7 @@ skynet_context_new(const char * name, const char *param) {
 		// 将服务对应的消息队列加入全局队列，这里面有可能消息呢
 		skynet_globalmq_push(queue);
 		if (ret) {
+			// 成功启动服务日志...
 			skynet_error(ret, "LAUNCH %s %s", name, param ? param : "");
 		}
 		return ret;
@@ -281,15 +288,20 @@ skynet_isremote(struct skynet_context * ctx, uint32_t handle, int * harbor) {
 	return ret;
 }
 
+// 处理单个服务消息(服务对应的回调)
 static void
 dispatch_message(struct skynet_context *ctx, struct skynet_message *msg) {
 	assert(ctx->init);
 	CHECKCALLING_BEGIN(ctx)
+	// 当前工作线程线程变量key绑定到当前服务句柄
 	pthread_setspecific(G_NODE.handle_key, (void *)(uintptr_t)(ctx->handle));
+	// 消息类型
 	int type = msg->sz >> MESSAGE_TYPE_SHIFT;
+	// 消息长度
 	size_t sz = msg->sz & MESSAGE_TYPE_MASK;
 	FILE *f = (FILE *)ATOM_LOAD(&ctx->logfile);
 	if (f) {
+		// 如果存在文件句柄，记录服务日志
 		skynet_log_output(f, msg->source, type, msg->session, msg->data, sz);
 	}
 	++ctx->message_count;
@@ -321,44 +333,57 @@ skynet_context_dispatchall(struct skynet_context * ctx) {
 struct message_queue * 
 skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue *q, int weight) {
 	if (q == NULL) {
+		// 服务队列为空，从全局活跃消息队列中取出一个包含待处理消息的服务队列
 		q = skynet_globalmq_pop();
 		if (q==NULL)
 			return NULL;
 	}
 
+	// 通过队列关联的服务句柄
 	uint32_t handle = skynet_mq_handle(q);
 
+	// 找到对应的服务上下文
 	struct skynet_context * ctx = skynet_handle_grab(handle);
 	if (ctx == NULL) {
 		struct drop_t d = { handle };
 		skynet_mq_release(q, drop_message, &d);
+		// 释放无效队列并尝试获取下一个
 		return skynet_globalmq_pop();
 	}
 
+	// n=1 - 默认就是公平竞争模式，每次只处理一个消息
 	int i,n=1;
 	struct skynet_message msg;
 
 	for (i=0;i<n;i++) {
 		if (skynet_mq_pop(q,&msg)) {
+			// 没有消息了，返回1，说明服务对应的消息队列已经空了
 			skynet_context_release(ctx);
+			// 从全局消息队列中取出一个包含待处理消息的服务队列
 			return skynet_globalmq_pop();
 		} else if (i==0 && weight >= 0) {
+			// 取出消息了，返回0，并且第一次进入循环，并且权重大于等于0，从而确定本次工作线程要处理该服务的消息个数
 			n = skynet_mq_length(q);
 			n >>= weight;
 		}
+		// 过载监控
 		int overload = skynet_mq_overload(q);
 		if (overload) {
 			skynet_error(ctx, "May overload, message queue length = %d", overload);
 		}
 
+		// 触发监控器，记录消息来源和处理服务句柄
 		skynet_monitor_trigger(sm, msg.source , handle);
 
 		if (ctx->cb == NULL) {
+			// 没有处理函数? 释放消息数据
 			skynet_free(msg.data);
 		} else {
+			// 
 			dispatch_message(ctx, &msg);
 		}
 
+		// 触发监控器，记录消息来源和处理服务句柄为0，从而表示本次处理完成
 		skynet_monitor_trigger(sm, 0,0);
 	}
 

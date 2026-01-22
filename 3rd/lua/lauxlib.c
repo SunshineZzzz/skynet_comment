@@ -1295,12 +1295,17 @@ cache_clear(lua_State *L) {
 
 LUAMOD_API int luaopen_cache(lua_State *L) {
 	luaL_Reg l[] = {
+    // 清除缓存
 		{ "clear", cache_clear },
-		{ "mode", cache_mode },
+		// 配置缓存策略
+    { "mode", cache_mode },
 		{ NULL, NULL },
 	};
+  // 创建一个lua扩展tale，把 clear 和 mode 注册进去
 	luaL_newlib(L,l);
+  // 获取当前全局环境下的 loadfile 函数
 	lua_getglobal(L, "loadfile");
+  // 把原生的 loadfile 存入这个新库的 loadfile 字段里
 	lua_setfield(L, -2, "loadfile");
 	return 1;
 }

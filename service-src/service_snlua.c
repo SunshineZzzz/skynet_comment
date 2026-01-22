@@ -274,24 +274,33 @@ static int luaB_cowrap (lua_State *L) {
 
 // profile lib
 
+// skynet.profile.start(co)，启动对 co 协程的性能统计
 static int
 lstart(lua_State *L) {
+	// 确定要统计哪个协程
 	if (lua_gettop(L) != 0) {
+		// 多穿的参数直接丢弃
 		lua_settop(L,1);
+		// 确保第一个参数是协程
 		luaL_checktype(L, 1, LUA_TTHREAD);
 	} else {
+		// 如果没传参数，就把当前运行的协程压入栈顶
 		lua_pushthread(L);
 	}
+	// 去 Upvalue 1 查，如果已经有 start_time 了，说明还没 stop 就又调了 start
 	lua_Number start_time = 0;
 	if (timing_enable(L, 1, &start_time)) {
 		return luaL_error(L, "Thread %p start profile more than once", lua_topointer(L, 1));
 	}
 
+	// 重置累计时间
 	// reset total time
 	lua_pushvalue(L, 1);
 	lua_pushnumber(L, 0);
+	// Upvalue 2 是 TotalTimeTable。执行：TotalTimeTable[co] = 0
 	lua_rawset(L, lua_upvalueindex(2));
 
+	// 设置开始时刻
 	// set start time
 	lua_pushvalue(L, 1);
 	start_time = get_time();
@@ -299,35 +308,45 @@ lstart(lua_State *L) {
 	fprintf(stderr, "PROFILE [%p] start\n", L);
 #endif
 	lua_pushnumber(L, start_time);
+	// Upvalue 1 是 StartTimeTable。执行：StartTimeTable[co] = start_time
 	lua_rawset(L, lua_upvalueindex(1));
 
 	return 0;
 }
 
+// skynet.profile.stop(co)，停止对 co 协程的性能统计
 static int
 lstop(lua_State *L) {
+	// 同上
 	if (lua_gettop(L) != 0) {
 		lua_settop(L,1);
 		luaL_checktype(L, 1, LUA_TTHREAD);
 	} else {
 		lua_pushthread(L);
 	}
+	// 看看之前有没有 start 过
 	lua_Number start_time = 0;
 	if (!timing_enable(L, 1, &start_time)) {
 		return luaL_error(L, "Call profile.start() before profile.stop()");
 	}
+	// 计算当前时间与 start_time 的差值
 	double ti = diff_time(start_time);
+	// 从 Upvalue 2 获取中途累加的累计时间
 	double total_time = timing_total(L,1);
 
+	// 清理 StartTimeTable[co] = nil
 	lua_pushvalue(L, 1);	// push coroutine
 	lua_pushnil(L);
 	lua_rawset(L, lua_upvalueindex(1));
 
+	// 清理 TotalTimeTable[co] = nil
 	lua_pushvalue(L, 1);	// push coroutine
 	lua_pushnil(L);
 	lua_rawset(L, lua_upvalueindex(2));
 
+	// 最终时间(纯粹的 CPU 耗时) = 中途累计时间 + 本次运行时间
 	total_time += ti;
+	// 把结果压栈，返回给 Lua
 	lua_pushnumber(L, total_time);
 #ifdef DEBUG_LOG
 	fprintf(stderr, "PROFILE [%p] stop (%lf/%lf)\n", lua_tothread(L,1), ti, total_time);
@@ -336,27 +355,39 @@ lstop(lua_State *L) {
 	return 1;
 }
 
+// 初始化skynet.profile库
 static int
 init_profile(lua_State *L) {
 	luaL_Reg l[] = {
+		// 开始对特定Lua协程进行性能分析（Profiling），记录其开始执行的时间点。
 		{ "start", lstart },
+		// 停止对特定Lua协程的性能分析，计算其从 start到 stop的总执行耗时。
 		{ "stop", lstop },
+		// 	替换Lua原生的 coroutine.resume。在恢复协程执行的前后注入钩子代码，用于透明地统计协程的执行时间。
 		{ "resume", luaB_coresume },
+		// 	替换Lua原生的 coroutine.wrap。功能与 resume类似，是对创建协程包装函数的增强，同样用于性能监控。
 		{ "wrap", luaB_cowrap },
 		{ NULL, NULL },
 	};
+	// 创建一个lua扩展tale
 	luaL_newlibtable(L,l);
+	// 创建第一个表，准备用来存每个协程开始跑的时间
 	lua_newtable(L);	// table thread->start time
+	// 创建第二个表，准备用来存每个协程总共跑了多久
 	lua_newtable(L);	// table thread->total time
 
+	// 创建全弱表
 	lua_newtable(L);	// weak table
 	lua_pushliteral(L, "kv");
 	lua_setfield(L, -2, "__mode");
 
+	// StartTimeTable 和 TotalTimeTable 都具有相同元表
+	// StartTimeTable 和 TotalTimeTable 都是全弱表了
 	lua_pushvalue(L, -1);
 	lua_setmetatable(L, -3);
 	lua_setmetatable(L, -3);
 
+	// 注册l & 2个全弱表上值
 	luaL_setfuncs(L,l,2);
 
 	return 1;
@@ -394,12 +425,17 @@ static int
 init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t sz) {
 	lua_State *L = l->L;
 	l->ctx = ctx;
+	// 停止GC
 	lua_gc(L, LUA_GCSTOP, 0);
+	// 忽略环境变量
 	lua_pushboolean(L, 1);  /* signal for libraries to ignore env. vars. */
 	lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
+	// 加载标准库
 	luaL_openlibs(L);
+	// 加载skynet.profile库
 	luaL_requiref(L, "skynet.profile", init_profile, 0);
 
+	// 替换了 coroutine.resume和 coroutine.wrap这两个核心函数，目的是统计协程的CPU耗时
 	int profile_lib = lua_gettop(L);
 	// replace coroutine.resume / coroutine.wrap
 	lua_getglobal(L, "coroutine");
@@ -408,40 +444,53 @@ init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t s
 	lua_getfield(L, profile_lib, "wrap");
 	lua_setfield(L, -2, "wrap");
 
+	// 把栈清了
 	lua_settop(L, profile_lib-1);
 
+	// 全局注册表["skynet_context"] = ctx
 	lua_pushlightuserdata(L, ctx);
 	lua_setfield(L, LUA_REGISTRYINDEX, "skynet_context");
+	// 加载skynet.codecache库
 	luaL_requiref(L, "skynet.codecache", codecache , 0);
 	lua_pop(L,1);
 
+	// 开启分代GC
 	lua_gc(L, LUA_GCGEN, 0, 0);
 
+	// lua搜索路径
 	const char *path = optstring(ctx, "lua_path","./lualib/?.lua;./lualib/?/init.lua");
 	lua_pushstring(L, path);
 	lua_setglobal(L, "LUA_PATH");
+	// luaC库搜索路径
 	const char *cpath = optstring(ctx, "lua_cpath","./luaclib/?.so");
 	lua_pushstring(L, cpath);
 	lua_setglobal(L, "LUA_CPATH");
+	// Skynet服务脚本搜索路径
 	const char *service = optstring(ctx, "luaservice", "./service/?.lua");
 	lua_pushstring(L, service);
 	lua_setglobal(L, "LUA_SERVICE");
+	// 可以设置预加载的模块
 	const char *preload = skynet_command(ctx, "GETENV", "preload");
 	lua_pushstring(L, preload);
 	lua_setglobal(L, "LUA_PRELOAD");
 
+	// 错误处理函数，如果 Lua 运行出错了，它会去抓取当前的调用栈信息，格式化成易读的字符串。
 	lua_pushcfunction(L, traceback);
 	assert(lua_gettop(L) == 1);
 
+	// snlua加载器脚本路径
 	const char * loader = optstring(ctx, "lualoader", "./lualib/loader.lua");
 
+	// 词语发解析，不执行
 	int r = luaL_loadfile(L,loader);
 	if (r != LUA_OK) {
 		skynet_error(ctx, "Can't load %s : %s", loader, lua_tostring(L, -1));
 		report_launcher_error(ctx);
 		return 1;
 	}
+	// 压入参数
 	lua_pushlstring(L, args, sz);
+	//  调用
 	r = lua_pcall(L,1,0,1);
 	if (r != LUA_OK) {
 		skynet_error(ctx, "lua loader error : %s", lua_tostring(L, -1));
@@ -449,6 +498,7 @@ init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t s
 		return 1;
 	}
 	lua_settop(L,0);
+	// 如果设置了内存限制，就设置到服务中
 	if (lua_getfield(L, LUA_REGISTRYINDEX, "memlimit") == LUA_TNUMBER) {
 		size_t limit = lua_tointeger(L, -1);
 		l->mem_limit = limit;
@@ -458,6 +508,7 @@ init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t s
 	}
 	lua_pop(L, 1);
 
+	// 开启GC
 	lua_gc(L, LUA_GCRESTART, 0);
 
 	return 0;
@@ -467,7 +518,9 @@ static int
 launch_cb(struct skynet_context * context, void *ud, int type, int session, uint32_t source , const void * msg, size_t sz) {
 	assert(type == 0 && session == 0);
 	struct snlua *l = ud;
+	// 后续都会交由lua接管，所以这里先清空回调函数和其用户数据参数
 	skynet_callback(context, NULL, NULL);
+	// 
 	int err = init_cb(l, context, msg, sz);
 	if (err) {
 		skynet_command(context, "EXIT", NULL);

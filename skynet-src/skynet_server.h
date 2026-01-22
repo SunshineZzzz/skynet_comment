@@ -24,6 +24,7 @@ int skynet_context_push(uint32_t handle, struct skynet_message *message);
 void skynet_context_send(struct skynet_context * context, void * msg, size_t sz, uint32_t source, int type, int session);
 // 生成消息会话ID
 int skynet_context_newsession(struct skynet_context *);
+// 处理某个服务消息队列中的消息，返回下一个服务消息队列
 struct message_queue * skynet_context_message_dispatch(struct skynet_monitor *, struct message_queue *, int weight);	// return next queue
 int skynet_context_total();
 void skynet_context_dispatchall(struct skynet_context * context);	// for skynet_error output before exit

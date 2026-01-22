@@ -176,10 +176,13 @@ thread_worker(void *p) {
 	skynet_initthread(THREAD_WORKER);
 	struct message_queue * q = NULL;
 	while (!m->quit) {
+		// 处理消息
 		q = skynet_context_message_dispatch(sm, q, weight);
 		if (q == NULL) {
+			// 说明全局消息队列已经空了，当前线程可以休息了
 			if (pthread_mutex_lock(&m->mutex) == 0) {
 				++ m->sleep;
+				// 无视虚假唤醒，被唤醒了就开始处理全局消息队列中的服务消息
 				// "spurious wakeup" is harmless,
 				// because skynet_context_message_dispatch() can be call at any time.
 				if (!m->quit)

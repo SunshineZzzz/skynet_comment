@@ -6,13 +6,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// 文本消息
 #define PTYPE_TEXT 0
 #define PTYPE_RESPONSE 1
 #define PTYPE_MULTICAST 2
 #define PTYPE_CLIENT 3
 #define PTYPE_SYSTEM 4
 #define PTYPE_HARBOR 5
+// 网络事件标志
 #define PTYPE_SOCKET 6
+// 错误消息标志
 // read lualib/skynet.lua examples/simplemonitor.lua
 #define PTYPE_ERROR 7	
 // read lualib/skynet.lua lualib/mqueue.lua lualib/snax.lua
@@ -26,8 +29,10 @@
 // 消息是否分配会话ID标志
 #define PTYPE_TAG_ALLOCSESSION 0x20000
 
+// 服务信息
 struct skynet_context;
 
+// 给日志服务发送日志消息
 void skynet_error(struct skynet_context * context, const char *msg, ...);
 // 指定服务对象执行指定的命令和参数，返回命令执行结果
 const char * skynet_command(struct skynet_context * context, const char * cmd , const char * parm);
