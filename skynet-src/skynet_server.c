@@ -379,7 +379,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 			// 没有处理函数? 释放消息数据
 			skynet_free(msg.data);
 		} else {
-			// 
+			// 处理服务消息
 			dispatch_message(ctx, &msg);
 		}
 
@@ -533,6 +533,7 @@ cmd_kill(struct skynet_context * context, const char * param) {
 	return NULL;
 }
 
+// 启动一个服务
 static const char *
 cmd_launch(struct skynet_context * context, const char * param) {
 	size_t sz = strlen(param);
@@ -705,6 +706,7 @@ static struct command_func cmd_funcs[] = {
 	{ "NAME", cmd_name },
 	{ "EXIT", cmd_exit },
 	{ "KILL", cmd_kill },
+	// 启动一个服务
 	{ "LAUNCH", cmd_launch },
 	{ "GETENV", cmd_getenv },
 	{ "SETENV", cmd_setenv },

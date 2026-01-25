@@ -1,3 +1,5 @@
+-- Comment: 虚拟的 Harbor 服务，用于单节点 skynet 模式
+
 local skynet = require "skynet"
 require "skynet.manager"	-- import skynet.launch, ...
 

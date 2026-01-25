@@ -1,3 +1,5 @@
+-- Comment: 数据中心服务
+
 local skynet = require "skynet"
 
 local command = {}

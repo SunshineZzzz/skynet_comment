@@ -1,3 +1,5 @@
+-- Comment: 集群从节点服务
+
 local skynet = require "skynet"
 local socket = require "skynet.socket"
 local socketdriver = require "skynet.socketdriver"

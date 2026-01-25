@@ -1,3 +1,5 @@
+-- Comment: 服务管理器
+
 local skynet = require "skynet"
 local core = require "skynet.core"
 require "skynet.manager"	-- import manager apis

@@ -4,11 +4,13 @@ local skynet = require "skynet.manager"	-- import skynet.launch, ...
 skynet.start(function()
 	local standalone = skynet.getenv "standalone"
 
+	-- 启动服务管理器
 	local launcher = assert(skynet.launch("snlua","launcher"))
 	skynet.name(".launcher", launcher)
 
 	local harbor_id = tonumber(skynet.getenv "harbor" or 0)
 	if harbor_id == 0 then
+		-- 单机模式
 		assert(standalone ==  nil)
 		standalone = true
 		skynet.setenv("standalone", "true")
@@ -20,6 +22,7 @@ skynet.start(function()
 		skynet.name(".cslave", slave)
 
 	else
+		-- 集群模式
 		if standalone then
 			if not pcall(skynet.newservice,"cmaster") then
 				skynet.abort()

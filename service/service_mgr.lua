@@ -1,3 +1,5 @@
+-- Comment: 服务管理器
+
 local skynet = require "skynet"
 require "skynet.manager"	-- import skynet.register
 local snax = require "skynet.snax"

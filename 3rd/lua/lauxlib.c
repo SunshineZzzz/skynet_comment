@@ -1128,11 +1128,13 @@ LUALIB_API void luaL_checkversion_ (lua_State *L, lua_Number ver, size_t sz) {
 
 #include "spinlock.h"
 
+// proto缓存
 struct codecache {
 	struct spinlock lock;
 	lua_State *L;
 };
 
+// 全局proto缓存对象
 static struct codecache CC;
 
 static void
@@ -1248,17 +1250,22 @@ LUALIB_API int luaL_loadfilex (lua_State *L, const char *filename,
   lua_State * eL;
   int err;
   const void * oldv;
+  // 缓存关闭，走原生逻辑
   if (level == CACHE_OFF || filename == NULL) {
     return luaL_loadfilex_(L, filename, mode);
   }
+  // 全局proto缓存对象中查找
   proto = load_proto(filename);
   if (proto) {
+    // 直接clone LClosure
     lua_clonefunction(L, proto);
     return LUA_OK;
   }
   if (level == CACHE_EXIST) {
+    // 直接走原生逻辑
     return luaL_loadfilex_(L, filename, mode);
   }
+  // 缓存流程
   eL = luaL_newstate();
   if (eL == NULL) {
     lua_pushliteral(L, "New state failed");

@@ -1,3 +1,5 @@
+-- Comment: 集群控制中心服务
+
 local skynet = require "skynet"
 local socket = require "skynet.socket"
 

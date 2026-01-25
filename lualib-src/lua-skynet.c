@@ -50,6 +50,7 @@ struct callback_context {
 	lua_State *L;
 };
 
+// 将C层收到的消息传递到Lua层进行处理的核心桥梁
 static int
 _cb(struct skynet_context * context, void * ud, int type, int session, uint32_t source, const void * msg, size_t sz) {
 	struct callback_context *cb_ctx = (struct callback_context *)ud;
@@ -119,25 +120,34 @@ _forward_pre(struct skynet_context *context, void *ud, int type, int session, ui
 	return forward_cb(context, cb_ctx, type, session, source, msg, sz);
 }
 
+// 将一个 Lua 函数设置成 C 层 Skynet 服务的消息回调
 static int
 lcallback(lua_State *L) {
 	struct skynet_context * context = lua_touserdata(L, lua_upvalueindex(1));
+	// lua消费完的消息是否清理内存，不清理说明需要转发
 	int forward = lua_toboolean(L, 2);
 	luaL_checktype(L,1,LUA_TFUNCTION);
 	lua_settop(L,1);
 	struct callback_context * cb_ctx = (struct callback_context *)lua_newuserdatauv(L, sizeof(*cb_ctx), 2);
 	cb_ctx->L = lua_newthread(L);
 	lua_pushcfunction(cb_ctx->L, traceback);
+	// cb_ctx upvalue[0] = cb_ctx->L
 	lua_setiuservalue(L, -2, 1);
+	// 第一次调用时，cb_ctx upvalue[1] = nil
 	lua_getfield(L, LUA_REGISTRYINDEX, "callback_context");
 	lua_setiuservalue(L, -2, 2);
+	// g->registry["callback_context"] = cb_ctx
+	// 把新创建的回调环境存起来，防止被销毁，同时把旧的回调环境像“串糖葫芦”一样串在后面。
 	lua_setfield(L, LUA_REGISTRYINDEX, "callback_context");
+	// lua层消息回调函数设置到新的luastate中
 	lua_xmove(L, cb_ctx->L, 1);
 
+	// 注册
 	skynet_callback(context, cb_ctx, (forward)?(_forward_pre):(_cb_pre));
 	return 0;
 }
 
+// 执行对应服务的命令
 static int
 lcommand(lua_State *L) {
 	struct skynet_context * context = lua_touserdata(L, lua_upvalueindex(1));
@@ -492,6 +502,7 @@ ltrace(lua_State *L) {
 	return 0;
 }
 
+// 注册skynet核心库
 LUAMOD_API int
 luaopen_skynet_core(lua_State *L) {
 	luaL_checkversion(L);
@@ -500,11 +511,13 @@ luaopen_skynet_core(lua_State *L) {
 		{ "send" , lsend },
 		{ "genid", lgenid },
 		{ "redirect", lredirect },
+		// 执行对应服务的命令
 		{ "command" , lcommand },
 		{ "intcommand", lintcommand },
 		{ "addresscommand", laddresscommand },
 		{ "error", lerror },
 		{ "harbor", lharbor },
+		// 将一个 Lua 函数设置成 C 层 Skynet 服务的消息回调
 		{ "callback", lcallback },
 		{ "trace", ltrace },
 		{ NULL, NULL },

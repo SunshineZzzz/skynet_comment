@@ -421,6 +421,7 @@ optstring(struct skynet_context *ctx, const char *key, const char * str) {
 	return ret;
 }
 
+// 初始化snlua
 static int
 init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t sz) {
 	lua_State *L = l->L;
@@ -520,7 +521,7 @@ launch_cb(struct skynet_context * context, void *ud, int type, int session, uint
 	struct snlua *l = ud;
 	// 后续都会交由lua接管，所以这里先清空回调函数和其用户数据参数
 	skynet_callback(context, NULL, NULL);
-	// 
+	// 初始化snlua
 	int err = init_cb(l, context, msg, sz);
 	if (err) {
 		skynet_command(context, "EXIT", NULL);
